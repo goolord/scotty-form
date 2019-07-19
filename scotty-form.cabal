@@ -5,8 +5,8 @@ cabal-version: >=1.10
 
 name: scotty-form
 version: 0.1.0.0
--- synopsis:
--- description:
+synopsis: Html form validation using `ditto`
+description: Formlet library for `scotty` using `lucid` and `ditto`
 -- bug-reports:
 license: GPL-2
 license-file: LICENSE
@@ -16,6 +16,10 @@ maintainer: zacharyachurchill@gmail.com
 category: Web
 build-type: Simple
 extra-source-files: CHANGELOG.md
+
+source-repository head
+    type:     git
+    location: https://github.com/goolord/scotty-form.git
 
 library
   exposed-modules: Web.Scotty.Form
