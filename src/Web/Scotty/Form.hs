@@ -1,23 +1,25 @@
 {-# language OverloadedStrings #-}
-{-# language TypeFamilies #-}
+{-# language MultiParamTypeClasses #-}
+{-# language FlexibleInstances #-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Web.Scotty.Form where
 
 import Data.Text (Text)
-import Ditto.Backend
 import Ditto.Core hiding (view)
 import Ditto.Lucid
-import Ditto.Result
+import Ditto.Types
 import Lucid (HtmlT, Html)
 import Web.Scotty
-import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 
-instance FormError Text where
-  type ErrorInputType Text = Text
-  commonFormError = T.pack . (commonFormErrorStr T.unpack)
+instance Environment ActionM Text where
+  environment formId = do
+    qp <- params
+    case lookup (TL.pack $ show formId) qp of
+      Nothing -> pure Missing
+      Just x -> pure (Found $ TL.toStrict x)
 
 type ScottyForm a = Form ActionM Text Text (Html ()) a
 
@@ -37,18 +39,10 @@ reformSingle
   -> Form ActionM Text err view a
   -> ActionM (Result err a, view)
 reformSingle toForm prefix formlet = do
-  qp <- params
-  (View viewf, res') <- runForm (Environment $ env qp) (TL.fromStrict prefix) formlet
-  res <- res'
+  (View viewf, res) <- runForm prefix formlet
   case res of
     Error errs -> pure (Error errs, toForm [] $ viewf errs)
     Ok (Proved _ unProved') -> pure (Ok unProved', toForm [] $ viewf [])
-  where
-  env :: [Param] -> FormId -> ActionM (Value Text)
-  env qp' formId = do
-    case lookup (TL.pack $ show formId) qp' of
-      Nothing -> pure Missing
-      Just x -> pure (Found $ TL.toStrict x)
 
 simpleReformGET :: (Show b, Applicative f) 
   => Text
