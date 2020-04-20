@@ -4,7 +4,7 @@ cabal-version: >=1.10
 -- http://haskell.org/cabal/users-guide/
 
 name: scotty-form
-version: 0.2.0.0
+version: 0.3.0.0
 synopsis: Html form validation using `ditto`
 description: Formlet library for `scotty` using `lucid` and `ditto`
 -- bug-reports:
