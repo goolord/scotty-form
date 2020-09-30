@@ -20,7 +20,8 @@ import qualified Data.Text.Lazy as TL
 instance Environment ActionM [Param] where
   environment formId = do
     qp <- params
-    case filter (\(x,_) -> x == (TL.fromStrict $ encodeFormId formId)) qp of
+    let !formId' = TL.fromStrict $ encodeFormId formId
+    case filter (\(x,_) -> x == formId') qp of
       [] -> pure Missing
       xs -> pure (Found xs)
 
