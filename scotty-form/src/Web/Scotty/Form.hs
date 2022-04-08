@@ -14,12 +14,13 @@ import Data.Text (Text)
 import Ditto.Core hiding (view)
 import Ditto.Lucid
 import Ditto.Types
-import Lucid (HtmlT, Html)
+import Lucid (HtmlT, Html, ToHtml (toHtml))
 import Web.Scotty
 import Ditto.Backend
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
 import Data.Bifunctor (first)
+import Lucid.Base (ToHtml (toHtmlRaw))
 
 instance Environment ActionM [Param] where
   environment formId = do
@@ -34,13 +35,30 @@ instance FormInput [Param] where
   getInputStrings xs = fmap (TL.unpack . snd) xs
   getInputFile _ = Left $ commonFormError $ (NoFileFound [("","No support for file uploads")] :: CommonFormError [Param])
 
-instance FormError [Param] Text where
-  commonFormError e = commonFormErrorText encQP e
-    where
-    encQP [] = ""
-    encQP xs = T.intercalate ", " (fmap (TL.toStrict . snd) xs)
+instance FormError [Param] ScottyFormError where
+  commonFormError = SFECommon
 
-type ScottyForm a = Form ActionM [Param] Text (Html ()) a
+data ScottyFormError 
+  = SFECommon (CommonFormError [Param])
+  | SFEUnexpectedEmpty
+  | SFEUnexpectedMultiple
+  | SFEParseError Text
+
+instance ToHtml ScottyFormError where
+  toHtml (SFECommon ps) = toHtml $ commonFormErrorText encQP ps
+  toHtml (SFEParseError t) = toHtml t
+  toHtml SFEUnexpectedEmpty = "Unexpected empty query param list"
+  toHtml SFEUnexpectedMultiple = "Unexpected multiple query param list"
+  toHtmlRaw (SFECommon ps) = toHtmlRaw $ commonFormErrorText encQP ps
+  toHtmlRaw (SFEParseError t) = toHtmlRaw t
+  toHtmlRaw SFEUnexpectedEmpty = "Unexpected empty query param list"
+  toHtmlRaw SFEUnexpectedMultiple = "Unexpected multiple query param list"
+
+encQP :: [(a, TL.Text)] -> Text
+encQP [] = ""
+encQP xs = T.intercalate ", " (fmap (TL.toStrict . snd) xs)
+
+type ScottyForm a = Form ActionM [Param] ScottyFormError (Html ()) a
 
 ditto :: (Monoid view)  
   => ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
@@ -76,13 +94,13 @@ simpleDittoPOST :: (Applicative f)
 simpleDittoPOST action form = ditto (formGenPOST action) "ditto" form
 
 -- | lift a function which parses @Text@ into a function which parses a @[Param]@
-liftParser' :: (Text -> Either Text a) -> ([Param] -> Either Text a)
-liftParser' f [(_,x)] = f (TL.toStrict x)
-liftParser' _ [] = Left "Unexpected empty query param list"
-liftParser' _ _ = Left "Unexpected multiple query param list"
+liftParser' :: (Text -> Either Text a) -> ([Param] -> Either ScottyFormError a)
+liftParser' f [(_,x)] = first SFEParseError $ f (TL.toStrict x)
+liftParser' _ [] = Left SFEUnexpectedEmpty
+liftParser' _ _ = Left SFEUnexpectedMultiple
 
 -- | lift a function which parses @Text@ into a function which parses a @[Param]@
-liftParser :: (TL.Text -> Either TL.Text a) -> ([Param] -> Either Text a)
-liftParser f [(_,x)] = first TL.toStrict $ f x
-liftParser _ [] = Left "Unexpected empty query param list"
-liftParser _ _ = Left "Unexpected multiple query param list"
+liftParser :: (TL.Text -> Either TL.Text a) -> ([Param] -> Either ScottyFormError a)
+liftParser f [(_,x)] = first (SFEParseError . TL.toStrict) $ f x
+liftParser _ [] = Left SFEUnexpectedEmpty
+liftParser _ _ = Left SFEUnexpectedMultiple

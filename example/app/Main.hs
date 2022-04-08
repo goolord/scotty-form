@@ -68,7 +68,7 @@ formUser = do
 submit :: ScottyForm ()
 submit = void $ br *> buttonSubmit (const (Right () )) "submit" () ("Submit" :: Text)
 
-parserRead :: [Param] -> Either Text Int
+parserRead :: [Param] -> Either ScottyFormError Int
 parserRead = liftParser readEither
 
 sakura :: Html ()
