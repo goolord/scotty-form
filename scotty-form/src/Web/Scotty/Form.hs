@@ -1,7 +1,10 @@
-{-# language OverloadedStrings #-}
-{-# language MultiParamTypeClasses #-}
-{-# language FlexibleInstances #-}
-{-# language TypeFamilies #-}
+{-# LANGUAGE 
+    OverloadedStrings
+  , MultiParamTypeClasses
+  , FlexibleInstances
+  , TypeFamilies
+  , BangPatterns
+#-}
 
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
@@ -16,6 +19,7 @@ import Web.Scotty
 import Ditto.Backend
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as TL
+import Data.Bifunctor (first)
 
 instance Environment ActionM [Param] where
   environment formId = do
@@ -38,41 +42,47 @@ instance FormError [Param] Text where
 
 type ScottyForm a = Form ActionM [Param] Text (Html ()) a
 
-reform :: (Monoid view)  
+ditto :: (Monoid view)  
   => ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
   -> Text -- ^ form name prefix
   -> Form ActionM [Param] err view a  -- ^ the formlet
   -> ActionM (Result err a, view)
-reform toForm prefix formlet = do 
-  reformSingle toForm' prefix formlet
+ditto toForm prefix formlet = do 
+  dittoSingle toForm' prefix formlet
   where
   toForm' hidden view = toForm (("formname", prefix) : hidden) view
 
-reformSingle
+dittoSingle
   :: ([(Text, Text)] -> view -> view)
   -> Text
   -> Form ActionM [Param] err view a
   -> ActionM (Result err a, view)
-reformSingle toForm prefix formlet = do
+dittoSingle toForm prefix formlet = do
   (View viewf, res) <- runForm prefix formlet
   case res of
     Error errs -> pure (Error errs, toForm [] $ viewf errs)
     Ok (Proved _ unProved') -> pure (Ok unProved', toForm [] $ viewf [])
 
-simpleReformGET :: (Applicative f) 
+simpleDittoGET :: (Applicative f) 
   => Text
   -> Form ActionM [Param] err (HtmlT f ()) b 
   -> ActionM (Result err b, HtmlT f ())
-simpleReformGET action form = reform (formGenGET action) "reform" form
+simpleDittoGET action form = ditto (formGenGET action) "ditto" form
 
-simpleReformPOST :: (Applicative f) 
+simpleDittoPOST :: (Applicative f) 
   => Text
   -> Form ActionM [Param] err (HtmlT f ()) b 
   -> ActionM (Result err b, HtmlT f ())
-simpleReformPOST action form = reform (formGenPOST action) "reform" form
+simpleDittoPOST action form = ditto (formGenPOST action) "ditto" form
 
 -- | lift a function which parses @Text@ into a function which parses a @[Param]@
-liftParser :: (Text -> Either Text a) -> ([Param] -> Either Text a)
-liftParser f [(_,x)] = f (TL.toStrict x)
+liftParser' :: (Text -> Either Text a) -> ([Param] -> Either Text a)
+liftParser' f [(_,x)] = f (TL.toStrict x)
+liftParser' _ [] = Left "Unexpected empty query param list"
+liftParser' _ _ = Left "Unexpected multiple query param list"
+
+-- | lift a function which parses @Text@ into a function which parses a @[Param]@
+liftParser :: (TL.Text -> Either TL.Text a) -> ([Param] -> Either Text a)
+liftParser f [(_,x)] = first TL.toStrict $ f x
 liftParser _ [] = Left "Unexpected empty query param list"
 liftParser _ _ = Left "Unexpected multiple query param list"

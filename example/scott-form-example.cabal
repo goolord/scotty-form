@@ -1,0 +1,33 @@
+cabal-version: >=1.10
+name: scotty-form-example
+version: 0.3.0.0
+synopsis: Html form validation using `ditto`
+description: Formlet library for `scotty` using `lucid` and `ditto`
+-- bug-reports:
+license: MIT
+license-file: LICENSE
+author: goolord
+maintainer: zacharyachurchill@gmail.com
+-- copyright:
+category: Web
+build-type: Simple
+extra-source-files: CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/goolord/scotty-form.git
+
+executable scotty-form-example
+  ghc-options: -Wall
+  build-depends:
+      base
+    , text
+    , lucid ==2.11.0
+    , scotty ==0.12
+    , ditto
+    , ditto-lucid
+    , scotty-form
+    , path-pieces
+  hs-source-dirs: app
+  default-language: Haskell2010
+  main-is: Main.hs
