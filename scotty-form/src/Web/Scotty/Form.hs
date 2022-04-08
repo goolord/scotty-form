@@ -1,4 +1,4 @@
-{-# LANGUAGE 
+{-# LANGUAGE
     OverloadedStrings
   , MultiParamTypeClasses
   , FlexibleInstances
@@ -38,7 +38,8 @@ instance FormInput [Param] where
 instance FormError [Param] ScottyFormError where
   commonFormError = SFECommon
 
-data ScottyFormError 
+-- | the error case of running a 'ScottyForm'
+data ScottyFormError
   = SFECommon (CommonFormError [Param])
   | SFEUnexpectedEmpty
   | SFEUnexpectedMultiple
@@ -58,22 +59,24 @@ encQP :: [(a, TL.Text)] -> Text
 encQP [] = ""
 encQP xs = T.intercalate ", " (fmap (TL.toStrict . snd) xs)
 
+-- | a @ditto@ formlet for @scotty@
 type ScottyForm a = Form ActionM [Param] ScottyFormError (Html ()) a
 
-ditto :: (Monoid view)  
+ditto :: (Monoid view)
   => ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
   -> Text -- ^ form name prefix
-  -> Form ActionM [Param] err view a  -- ^ the formlet
+  -> Form ActionM [Param] err view a -- ^ the formlet
   -> ActionM (Result err a, view)
-ditto toForm prefix formlet = do 
+ditto toForm prefix formlet = do
   dittoSingle toForm' prefix formlet
   where
   toForm' hidden view = toForm (("formname", prefix) : hidden) view
 
+-- | a helpful wrapper around 'runForm'
 dittoSingle
-  :: ([(Text, Text)] -> view -> view)
-  -> Text
-  -> Form ActionM [Param] err view a
+  :: ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
+  -> Text -- ^ form name prefix
+  -> Form ActionM [Param] err view a -- ^ the formlet
   -> ActionM (Result err a, view)
 dittoSingle toForm prefix formlet = do
   (View viewf, res) <- runForm prefix formlet
@@ -81,25 +84,33 @@ dittoSingle toForm prefix formlet = do
     Error errs -> pure (Error errs, toForm [] $ viewf errs)
     Ok (Proved _ unProved') -> pure (Ok unProved', toForm [] $ viewf [])
 
-simpleDittoGET :: (Applicative f) 
-  => Text
-  -> Form ActionM [Param] err (HtmlT f ()) b 
+-- | create @\<form action=action method=\"GET\" enctype=\"application/xxx-form-urlencoded\"\>@
+simpleDittoGET :: (Applicative f)
+  => Text -- ^ action
+  -> Form ActionM [Param] err (HtmlT f ()) b -- ^ formlet
   -> ActionM (Result err b, HtmlT f ())
 simpleDittoGET action form = ditto (formGenGET action) "ditto" form
 
-simpleDittoPOST :: (Applicative f) 
-  => Text
-  -> Form ActionM [Param] err (HtmlT f ()) b 
+-- | create @\<form action=action method=\"POST\" enctype=\"application/xxx-form-urlencoded\"\>@
+simpleDittoPOST :: (Applicative f)
+  => Text -- ^ action
+  -> Form ActionM [Param] err (HtmlT f ()) b -- ^ formlet
   -> ActionM (Result err b, HtmlT f ())
 simpleDittoPOST action form = ditto (formGenPOST action) "ditto" form
 
--- | lift a function which parses @Text@ into a function which parses a @[Param]@
+-- | lift a function which parses strict @Text@ into a function which parses a @[Param]@
 liftParser' :: (Text -> Either Text a) -> ([Param] -> Either ScottyFormError a)
 liftParser' f [(_,x)] = first SFEParseError $ f (TL.toStrict x)
 liftParser' _ [] = Left SFEUnexpectedEmpty
 liftParser' _ _ = Left SFEUnexpectedMultiple
 
--- | lift a function which parses @Text@ into a function which parses a @[Param]@
+-- | lift a function which parses lazy @Text@ into a function which parses a @[Param]@
+-- e.g.
+--
+-- @
+-- parserRead :: Read a => [Param] -> Either ScottyFormError a
+-- parserRead = liftParser readEither
+-- @
 liftParser :: (TL.Text -> Either TL.Text a) -> ([Param] -> Either ScottyFormError a)
 liftParser f [(_,x)] = first (SFEParseError . TL.toStrict) $ f x
 liftParser _ [] = Left SFEUnexpectedEmpty
