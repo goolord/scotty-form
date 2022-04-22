@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Ditto.Core hiding (view)
 import Ditto.Lucid
 import Ditto.Types
-import Lucid (HtmlT, Html, ToHtml (toHtml))
+import Lucid (HtmlT, ToHtml (toHtml))
 import Web.Scotty.Trans
 import Ditto.Backend
 import qualified Data.Text as T
@@ -60,7 +60,7 @@ encQP [] = ""
 encQP xs = T.intercalate ", " (fmap (TL.toStrict . snd) xs)
 
 -- | a @ditto@ formlet for @scotty@
-type ScottyForm e m a = Form (ActionT e m) [Param] ScottyFormError (Html ()) a
+type ScottyForm e m a = Form (ActionT e m) [Param] ScottyFormError (HtmlT (ActionT e m) ()) a
 
 ditto :: (Monoid view, Monad m, ScottyError e)
   => ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
