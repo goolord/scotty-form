@@ -18,11 +18,13 @@ source-repository head
   location: https://github.com/goolord/scotty-form.git
 
 library
-  exposed-modules: Web.Scotty.Form
+  exposed-modules:
+    Web.Scotty.Form
+    Web.Scotty.Trans.Form
   ghc-options: -Wall
   -- other-modules:
   -- other-extensions:
-  build-depends: 
+  build-depends:
       base >=4.12 && <5
     , text >=1.2.4 && <3.0
     , lucid >=2.9.12 && <3.0
