@@ -1,38 +1,32 @@
-{-# LANGUAGE
-    OverloadedStrings
-  , MultiParamTypeClasses
-  , FlexibleInstances
-  , TypeFamilies
-  , BangPatterns
-#-}
-
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-orphans -Wno-error=orphans #-}
 
 module Web.Scotty.Trans.Form where
 
+import Data.Bifunctor (first)
+import UnliftIO (MonadUnliftIO)
 import Data.Text (Text)
+import Ditto.Backend
 import Ditto.Core hiding (view)
 import Ditto.Lucid
 import Ditto.Types
 import Lucid (HtmlT, ToHtml (toHtml))
-import Web.Scotty.Trans
-import Ditto.Backend
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as TL
-import Data.Bifunctor (first)
 import Lucid.Base (ToHtml (toHtmlRaw))
+import Web.Scotty.Trans
+import qualified Data.Text as T
 
-instance (ScottyError e, Monad m) => Environment (ActionT e m) [Param] where
+instance MonadUnliftIO m => Environment (ActionT m) [Param] where
   environment formId = do
-    qp <- params
-    let !formId' = TL.fromStrict $ encodeFormId formId
-    case filter (\(x,_) -> x == formId') qp of
+    pp <- pathParams
+    qp <- queryParams
+    fp <- formParams
+    let !formId' = encodeFormId formId
+    case filter (\(x, _) -> x == formId') (pp ++ qp ++ fp) of
       [] -> pure Missing
       xs -> pure (Found xs)
 
 instance FormInput [Param] where
   type FileType [Param] = ()
-  getInputStrings xs = fmap (TL.unpack . snd) xs
+  getInputStrings xs = fmap (T.unpack . snd) xs
   getInputFile _ = Left $ commonFormError $ (NoFileFound [("","No support for file uploads")] :: CommonFormError [Param])
 
 instance FormError [Param] ScottyFormError where
@@ -55,18 +49,18 @@ instance ToHtml ScottyFormError where
   toHtmlRaw SFEUnexpectedEmpty = "Unexpected empty query param list"
   toHtmlRaw SFEUnexpectedMultiple = "Unexpected multiple query param list"
 
-encQP :: [(a, TL.Text)] -> Text
+encQP :: [(a, Text)] -> Text
 encQP [] = ""
-encQP xs = T.intercalate ", " (fmap (TL.toStrict . snd) xs)
+encQP xs = T.intercalate ", " (fmap snd xs)
 
 -- | a @ditto@ formlet for @scotty@
-type ScottyForm e m a = Form (ActionT e m) [Param] ScottyFormError (HtmlT (ActionT e m) ()) a
+type ScottyForm m a = Form (ActionT m) [Param] ScottyFormError (HtmlT (ActionT m) ()) a
 
-ditto :: (Monoid view, Monad m, ScottyError e)
+ditto :: Monad m
   => ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
   -> Text -- ^ form name prefix
-  -> Form (ActionT e m) [Param] err view a -- ^ the formlet
-  -> ActionT e m (Result err a, view)
+  -> Form (ActionT m) [Param] err view a -- ^ the formlet
+  -> ActionT m (Result err a, view)
 ditto toForm prefix formlet = do
   dittoSingle toForm' prefix formlet
   where
@@ -74,11 +68,11 @@ ditto toForm prefix formlet = do
 
 -- | a helpful wrapper around 'runForm'
 dittoSingle
-  :: (Monad m, ScottyError e)
+  :: Monad m
   => ([(Text, Text)] -> view -> view) -- ^ wrap raw form html inside a <form> tag
   -> Text -- ^ form name prefix
-  -> Form (ActionT e m) [Param] err view a -- ^ the formlet
-  -> ActionT e m (Result err a, view)
+  -> Form (ActionT m) [Param] err view a -- ^ the formlet
+  -> ActionT m (Result err a, view)
 dittoSingle toForm prefix formlet = do
   (View viewf, res) <- runForm prefix formlet
   case res of
@@ -86,33 +80,33 @@ dittoSingle toForm prefix formlet = do
     Ok (Proved _ unProved') -> pure (Ok unProved', toForm [] $ viewf [])
 
 -- | create @\<form action=action method=\"GET\" enctype=\"application/xxx-form-urlencoded\"\>@
-simpleDittoGET :: (Applicative f, Monad m, ScottyError e)
+simpleDittoGET
+  :: (Applicative f, Monad m)
   => Text -- ^ action
-  -> Form (ActionT e m) [Param] err (HtmlT f ()) b -- ^ formlet
-  -> ActionT e m (Result err b, HtmlT f ())
+  -> Form (ActionT m) [Param] err (HtmlT f ()) b -- ^ formlet
+  -> ActionT m (Result err b, HtmlT f ())
 simpleDittoGET action form = ditto (formGenGET action) "ditto" form
 
 -- | create @\<form action=action method=\"POST\" enctype=\"application/xxx-form-urlencoded\"\>@
-simpleDittoPOST :: (Applicative f, Monad m, ScottyError e)
+simpleDittoPOST
+  :: (Applicative f, Monad m)
   => Text -- ^ action
-  -> Form (ActionT e m) [Param] err (HtmlT f ()) b -- ^ formlet
-  -> ActionT e m (Result err b, HtmlT f ())
+  -> Form (ActionT m) [Param] err (HtmlT f ()) b -- ^ formlet
+  -> ActionT m (Result err b, HtmlT f ())
 simpleDittoPOST action form = ditto (formGenPOST action) "ditto" form
 
 -- | lift a function which parses strict @Text@ into a function which parses a @[Param]@
 liftParser' :: (Text -> Either Text a) -> ([Param] -> Either ScottyFormError a)
-liftParser' f [(_,x)] = first SFEParseError $ f (TL.toStrict x)
+liftParser' f [(_, x)] = first SFEParseError $ f x
 liftParser' _ [] = Left SFEUnexpectedEmpty
 liftParser' _ _ = Left SFEUnexpectedMultiple
 
--- | lift a function which parses lazy @Text@ into a function which parses a @[Param]@
--- e.g.
+-- | lift a function which parses strict @Text@ into a function which parses a @[Param]@
 --
 -- @
--- parserRead :: Read a => [Param] -> Either ScottyFormError a
--- parserRead = liftParser readEither
+-- parserRead :: [Param] -> Either ScottyFormError Int
+-- parserRead = liftParser' $ \t ->
+--   maybe (Left "not an integer") Right (readMaybe @Int (T.unpack t))
 -- @
-liftParser :: (TL.Text -> Either TL.Text a) -> ([Param] -> Either ScottyFormError a)
-liftParser f [(_,x)] = first (SFEParseError . TL.toStrict) $ f x
-liftParser _ [] = Left SFEUnexpectedEmpty
-liftParser _ _ = Left SFEUnexpectedMultiple
+liftParser :: (Text -> Either Text a) -> ([Param] -> Either ScottyFormError a)
+liftParser = liftParser'

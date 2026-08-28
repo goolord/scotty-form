@@ -1,2 +1,5 @@
-packages: ./scotty-form/
-          ./example/
+packages:
+  ./scotty-form/
+  ./example/
+
+tests: False

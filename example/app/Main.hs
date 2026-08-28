@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeApplications #-}
-
 module Main where
 
 import Data.Text (Text)
@@ -12,10 +8,9 @@ import Ditto.Lucid
 import Ditto.Lucid.Named
 import Lucid
 import Web.PathPieces
-import qualified Data.Text.Lazy as TL
-import qualified Data.List.NonEmpty as NonEmpty
 import Ditto
-import Control.Monad (void)
+import Text.Read (readMaybe)
+import qualified Data.List.NonEmpty as NonEmpty
 
 data User = User
   { userAge :: Int
@@ -54,7 +49,7 @@ formUser = do
   userAge <- inputInt parserRead "age" 18
   userId <- pure 0 -- imagine this is maybe some DB effect
   label "Name" "name"
-  userName <- TL.toStrict <$> inputText (liftParser Right) "name" ""
+  userName <- inputText (liftParser' Right) "name" ""
   label "Country" "country"
   userCountry <- select "country"
     (NonEmpty.fromList $ fmap (\x -> (x, toHtml $ toPathPiece x))
@@ -66,10 +61,11 @@ formUser = do
   pure User{..}
 
 submit :: ScottyForm ()
-submit = void $ br *> buttonSubmit (const (Right () )) "submit" () ("Submit" :: Text)
+submit = br *> buttonSubmit (const (Right ())) "submit" () ("Submit" :: Text) *> pure ()
 
 parserRead :: [Param] -> Either ScottyFormError Int
-parserRead = liftParser readEither
+parserRead = liftParser' $ \t ->
+  maybe (Left "not an integer") Right (readMaybe @Int (T.unpack t))
 
 sakura :: Html ()
 sakura = link_ [rel_ "stylesheet", href_ "https://unpkg.com/sakura.css/css/sakura.css", type_ "text/css"]

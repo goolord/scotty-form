@@ -1,33 +1,58 @@
-cabal-version: >=1.10
+cabal-version: 3.8
 name: scotty-form-example
-version: 0.3.0.0
-synopsis: Html form validation using `ditto`
-description: Formlet library for `scotty` using `lucid` and `ditto`
--- bug-reports:
+version: 0.5.0.0
+synopsis: Example app for scotty-form
+description: Demonstrates form validation with scotty, lucid, and ditto
 license: MIT
-license-file: LICENSE
 author: goolord
 maintainer: zacharyachurchill@gmail.com
--- copyright:
+homepage: https://github.com/goolord/scotty-form
 category: Web
 build-type: Simple
-extra-source-files: CHANGELOG.md
 
 source-repository head
   type: git
   location: https://github.com/goolord/scotty-form.git
 
-executable scotty-form-example
+common warnings-base
   ghc-options: -Wall
+
+common extensions-shared
+  default-extensions:
+    OverloadedStrings
+    RecordWildCards
+    TypeApplications
+
+common defaults-ghc2024
+  import: warnings-base, extensions-shared
+  default-language: GHC2024
+
+common defaults-ghc2021
+  import: warnings-base, extensions-shared
+  default-language: GHC2021
+
+common defaults-legacy
+  import: warnings-base, extensions-shared
+  default-language: Haskell2010
+
+common defaults
+  if impl(ghc >= 9.10)
+    import: defaults-ghc2024
+  elif impl(ghc >= 9.2)
+    import: defaults-ghc2021
+  else
+    import: defaults-legacy
+
+executable scotty-form-example
+  import: defaults
+  main-is: Main.hs
+  hs-source-dirs: app
   build-depends:
       base
     , text
-    , lucid ==2.11.0
-    , scotty ==0.12
+    , lucid
+    , scotty
     , ditto
     , ditto-lucid
     , scotty-form
     , path-pieces
-  hs-source-dirs: app
-  default-language: Haskell2010
-  main-is: Main.hs
